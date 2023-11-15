@@ -898,6 +898,6 @@ pub fn main() !void {
     var encoded: [*c]u8 = undefined;
     const res = lodepng.lodepng_encode32(@ptrCast(&encoded), &size, @ptrCast(cv_buf.ptr), State.width, State.height);
     std.debug.print("PNG encode: [{}] {s}\n", .{res, lodepng.lodepng_error_text(res)});
-    var output_file = try std.fs.cwd().openFile(State.output_path, .{});
+    var output_file = try std.fs.cwd().openFile(State.output_path, .{.mode = .write_only});
     try output_file.writeAll(encoded[0..size]);
 }
