@@ -894,6 +894,10 @@ pub fn main() !void {
             
         }
     }
-    const res = lodepng.lodepng_encode32_file(State.output_path, @ptrCast(cv_buf.ptr), State.width, State.height);
+    var size: usize = 0;
+    var encoded: [*c]u8 = undefined;
+    const res = lodepng.lodepng_encode32(@ptrCast(&encoded), &size, @ptrCast(cv_buf.ptr), State.width, State.height);
     std.debug.print("PNG encode: [{}] {s}\n", .{res, lodepng.lodepng_error_text(res)});
+    var output_file = try std.fs.cwd().openFile(State.output_path, .{});
+    try output_file.writeAll(encoded[0..size]);
 }
