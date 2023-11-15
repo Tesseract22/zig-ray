@@ -89,8 +89,8 @@ pub fn parseCommands(path: []const u8, allocator: std.mem.Allocator, data: *Data
                     sphere.color = .{.color = State.color};
                 }
                 sphere.material = State.material.actual();
-                sphere.aabb.min = @splat(std.math.floatMin(f32));
-                sphere.aabb.max = @splat(std.math.floatMax(f32));
+                sphere.aabb.min = @splat(std.math.floatMax(f32));
+                sphere.aabb.max = @splat(-std.math.floatMax(f32));
                 sphere.aabb.min = sphere.c - @as(Vec3, @splat(sphere.r));
                 sphere.aabb.max = sphere.c + @as(Vec3, @splat(sphere.r));
                 data.geoms.append(.{.sphere = sphere}) catch unreachable;
@@ -393,7 +393,6 @@ const Ray = struct {
         var is_leaf = true;
         if (self.intersectAABB(root_node.aabb)) {
             if (root_node.left < nodes.len) {
-                is_leaf = false;
                 if (self.intersectBVH(root_node.left, nodes)) |sub_it| {
                     
                     if (sub_it.t < it.t) it = sub_it;
