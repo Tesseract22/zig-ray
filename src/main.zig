@@ -390,9 +390,22 @@ const Ray = struct {
     pub fn intersectBVH(self: Ray, root: usize, nodes: []BVHNode) ?Intersection {
         const root_node = nodes[root];
         var it: Intersection = .{.t = std.math.floatMax(f32), .object = undefined };
-
+        var is_leaf = true;
         if (self.intersectAABB(root_node.aabb)) {
-            if (root_node.isLeaf()) {
+            if (root_node.left < nodes.len) {
+                is_leaf = false;
+                if (self.intersectBVH(root_node.left, nodes)) |sub_it| {
+                    
+                    if (sub_it.t < it.t) it = sub_it;
+                }
+            }
+            if (root_node.right < nodes.len) {
+                is_leaf = false;
+                if (self.intersectBVH(root_node.right, nodes)) |sub_it| {
+                    if (sub_it.t < it.t) it = sub_it;
+                }
+            }
+            if (is_leaf) {
                 for (root_node.geoms) |*geom| {
                     switch (geom.*) {
                         .sphere => |*s| {
@@ -413,14 +426,9 @@ const Ray = struct {
                         },
                     }
                 }
-            } else {
-                if (self.intersectBVH(root_node.left, nodes)) |sub_it| {
-                    if (sub_it.t < it.t) it = sub_it;
-                }
-                if (self.intersectBVH(root_node.right, nodes)) |sub_it| {
-                    if (sub_it.t < it.t) it = sub_it;
-                }
             }
+
+            
         }
         return if (it.t == std.math.floatMax(f32)) null else it;
     }
@@ -730,21 +738,28 @@ const AABB = struct {
 const BVHNode = struct {
     pub var node_index: u32 = 0;
     pub fn makeTree(data: *Data) u32 {
-        return makeRecursive(data.geoms.items, 0, data.bvh_tree.items);
+        return makeRecursive(data.geoms.items, 0, data.bvh_tree.items, 0);
     }
     pub fn isLeaf(self: BVHNode) bool {
         return self.geoms.len <= 5;
     }
-    fn makeRecursive(geoms: []Geom, axis: u32, node_pool: []BVHNode) u32 {
+    fn makeRecursive(geoms: []Geom, axis: u32, node_pool: []BVHNode, ct: u32) u32 {
         const root_index = node_index;
         const root = &node_pool[root_index];
         node_index += 1;
         root.geoms = geoms;
         root.aabb = BVHNode.getAABBOfMany(root.geoms);
+        root.right = std.math.maxInt(u32);
+        root.left = std.math.maxInt(u32);
         if (geoms.len > 5) {
             const mid_index: u32 = @intCast(partition(root.geoms, (root.aabb.max[axis] + root.aabb.min[axis])/2, axis) + 1);
-            root.left = makeRecursive(geoms[0..mid_index], (axis+1)%3, node_pool);
-            root.right = makeRecursive(geoms[mid_index..], (axis+1)%3, node_pool);
+            root.left = makeRecursive(geoms[0..mid_index], (axis+1)%3, node_pool, ct);
+            if (mid_index == 0) {
+                if (ct >= 3) return root_index;
+                root.right = makeRecursive(geoms[mid_index..], (axis+1)%3, node_pool, ct+1);
+            } else {
+                root.right = makeRecursive(geoms[mid_index..], (axis+1)%3, node_pool, ct);
+            }
         }
  
         return root_index;
@@ -775,6 +790,7 @@ const BVHNode = struct {
     left: usize,
     right: usize,
     aabb: AABB,
+
 };
 fn startsWith(s: []const u8, prefix: []const u8) bool {
     return std.mem.startsWith(u8, s, prefix);
