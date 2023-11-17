@@ -3,7 +3,7 @@
 build:
 	@echo "zig build -Doptimize=ReleaseFast"
 	@if zig build -Doptimize=ReleaseFast; then \
-		echo "output to zig-out/bin/mp1"; \
+		echo "output to zig-out/bin/raytrace"; \
 	else \
 		echo "I am using Zig(https://ziglang.org/). You might want to download the compiler first"; \
 	fi
