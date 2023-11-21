@@ -2,7 +2,7 @@ const Canvas = @import("canvas.zig");
 const util = @import("util.zig");
 const scalarVec = util.scalarVecMul;
 const std = @import("std");
-
+const Thread = std.Thread;
 const lodepng = @cImport({
     @cInclude("lodepng.h");
 });
@@ -621,7 +621,6 @@ pub fn generateUnitSphere() Vec3 {
             v[i] = RandGen.random().float(f32);
         }
     }
-    
     return v;
 }
 const Texture = struct {
@@ -798,8 +797,39 @@ fn splitSpace(s: []const u8) std.mem.TokenIterator(u8, .scalar) {
     return std.mem.tokenizeScalar(u8, s, ' ');
 }
 
+fn renderLines(rgb_buf: []Vec4, data: Data, y_start: usize, y_end: usize) void {
+    for (y_start..y_end) |y| {
+        for (0..State.width) |x| {
+            renderPixel(rgb_buf, data, x, y);
+        }
+    }
+}
 
+fn renderPixel(rgb_buf: []Vec4, data: Data,  x: usize, y: usize) void {
+    const pixel = &rgb_buf[y * State.width + x];
+    if (State.aa > 0) {
+        for (0..State.aa) |_| {
+            const xa = @as(f32, @floatFromInt(x)) + RandGen.random().float(f32);
+            const ya = @as(f32, @floatFromInt(y)) + RandGen.random().float(f32);
+            var ray = getRayOnSubPixel(xa, ya) orelse continue;
+            if (State.dof[1] != 0) {
+                ray = ray.dof();
+            }
+            const color = ray.trace(data, 0, 0, false);
+            pixel.* += color;
+        }
+        pixel.* /= @splat(@floatFromInt(State.aa));
 
+    } else {
+        var ray = getRayOnPixel(x, y) orelse return;
+        if (State.dof[1] != 0) {
+            ray = ray.dof();
+        }
+        const color = ray.trace(data, 0, 0, false);
+        pixel.* += color;
+    }
+}
+var thread_count: usize = 1;
 pub fn main() !void {
     RandGen.seed( @intCast(std.time.timestamp()));
     const allocator = std.heap.c_allocator;
@@ -827,6 +857,9 @@ pub fn main() !void {
     defer {
         if (State.output_path.len != 0) allocator.free(State.output_path);
     }
+    if (args.len == 3) {
+        thread_count = std.fmt.parseInt(u32, args[2], 10) catch 1; 
+    }
     try data.bvh_tree.resize(data.geoms.items.len);
     std.debug.print("Geom[{}], Planes[{}]\n", .{data.geoms.items.len, data.planes.items.len});
     data.root_index = BVHNode.makeTree(&data);
@@ -838,43 +871,23 @@ pub fn main() !void {
     @memset(rgb_buf, .{0,0,0,0});
     // defer allocator.free(cv_buf);
     // defer allocator.free(rgb_buf);
-    
+    const each = State.height / thread_count;
+    var threads = try allocator.alloc(std.Thread, thread_count-1);
 
+    for (1..thread_count) |i| {
+        threads[i-1] = try Thread.spawn(.{}, renderLines, .{rgb_buf, data, each*(i-1), each*i});
 
-    for (0..State.height) |y| {
-        for (0..State.width) |x| {
-            const pixel = &rgb_buf[y * State.width + x];
-            if (State.aa > 0) {
-                for (0..State.aa) |_| {
-                    const xa = @as(f32, @floatFromInt(x)) + RandGen.random().float(f32);
-                    const ya = @as(f32, @floatFromInt(y)) + RandGen.random().float(f32);
-                    var ray = getRayOnSubPixel(xa, ya) orelse continue;
-                    if (State.dof[1] != 0) {
-                        ray = ray.dof();
-                    }
-                    const color = ray.trace(data, 0, 0, false);
-                    pixel.* += color;
-                }
-                pixel.* /= @splat(@floatFromInt(State.aa));
-
-            } else {
-                var ray = getRayOnPixel(x, y) orelse continue;
-                if (State.dof[1] != 0) {
-                    ray = ray.dof();
-                }
-                const color = ray.trace(data, 0, 0, false);
-                pixel.* += color;
-            }
-
-
-        }
     }
+    renderLines(rgb_buf, data, each*(thread_count-1), State.height);
     // const ray = getRayOnPixel(60, 25);
     // std.debug.print("ray: {any} == {any}", .{ray, util.normalize(Vec3{0.2,0,-1})});
     // if (ray.intersect(data)) |_| {
     //     std.debug.print("intersect\n", .{});
     // }
     // converting lrgb -> exposed -> srgb
+    for (threads) |t| {
+        t.join();
+    }
     for (0..State.height) |y| {
         for (0..State.width) |x| {
             const lcolor = @min(@max(rgb_buf[y * State.width + x], @as(Vec4, @splat(0))), @as(Vec4, @splat(1)));
