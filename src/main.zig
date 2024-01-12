@@ -1,4 +1,3 @@
-const Canvas = @import("canvas.zig");
 const util = @import("util.zig");
 const scalarVec = util.scalarVecMul;
 const std = @import("std");
@@ -493,7 +492,7 @@ const Ray = struct {
             var ray2: Ray = .{.origin = p, .n = util.normalize(generateUnitSphere() + normal)};
             ray2.origin += scalarVec(secondary_ray_off, ray2.n);
             const color2 = ray2.trace(data, depth, gi + 1, inside);
-            var lambert = @max(util.dot(normal, ray2.n), 0);
+            const lambert = @max(util.dot(normal, ray2.n), 0);
             inline for (0..3) |i| {
                 pixel[i] += color2[i] * color[i] * lambert * material.diffuse[i];
             }
@@ -866,7 +865,7 @@ pub fn main() !void {
     std.debug.print("BVH tree built with {} nodes\n", .{BVHNode.node_index});
     std.debug.print("Image[{} * {}] => {s}\n", .{State.width, State.height, State.output_path});
     var cv_buf = try allocator.alloc(u32, State.width * State.height);
-    var rgb_buf = try allocator.alloc(Vec4, State.width * State.height);
+    const rgb_buf = try allocator.alloc(Vec4, State.width * State.height);
     @memset(cv_buf, 0);
     @memset(rgb_buf, .{0,0,0,0});
     // defer allocator.free(cv_buf);
