@@ -860,9 +860,10 @@ pub fn main() !void {
         thread_count = std.fmt.parseInt(u32, args[2], 10) catch 1; 
     }
     try data.bvh_tree.resize(data.geoms.items.len);
-    std.debug.print("Geom[{}], Planes[{}]\n", .{data.geoms.items.len, data.planes.items.len});
+    std.debug.print("Geoms[{}], Planes[{}]\n", .{data.geoms.items.len, data.planes.items.len});
     data.root_index = BVHNode.makeTree(&data);
     std.debug.print("BVH tree built with {} nodes\n", .{BVHNode.node_index});
+    std.debug.print("using {} threads\n", .{thread_count});
     std.debug.print("Image[{} * {}] => {s}\n", .{State.width, State.height, State.output_path});
     var cv_buf = try allocator.alloc(u32, State.width * State.height);
     const rgb_buf = try allocator.alloc(Vec4, State.width * State.height);
@@ -872,9 +873,9 @@ pub fn main() !void {
     // defer allocator.free(rgb_buf);
     const each = State.height / thread_count;
     var threads = try allocator.alloc(std.Thread, thread_count-1);
-
-    for (1..thread_count) |i| {
-        threads[i-1] = try Thread.spawn(.{}, renderLines, .{rgb_buf, data, each*(i-1), each*i});
+    const time = std.time.milliTimestamp();
+    for (0..thread_count-1) |i| {
+        threads[i] = try Thread.spawn(.{}, renderLines, .{rgb_buf, data, each*i, each*(i+1)});
 
     }
     renderLines(rgb_buf, data, each*(thread_count-1), State.height);
@@ -887,6 +888,7 @@ pub fn main() !void {
     for (threads) |t| {
         t.join();
     }
+    std.debug.print("took {} seconds\n", .{@divTrunc(std.time.milliTimestamp() - time, std.time.ms_per_s) });
     for (0..State.height) |y| {
         for (0..State.width) |x| {
             const lcolor = @min(@max(rgb_buf[y * State.width + x], @as(Vec4, @splat(0))), @as(Vec4, @splat(1)));
