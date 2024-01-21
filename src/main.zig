@@ -458,7 +458,7 @@ const Ray = struct {
             .sphere => |sph| switch (sph[0].color) {
                 .color => |color| color,
                 .texture => |texture| blk: {
-                    const u = 0.5 + std.math.atan2(f32, normal[0], normal[2]) / (std.math.pi * 2);
+                    const u = 0.5 + std.math.atan2(normal[0], normal[2]) / (std.math.pi * 2);
                     const v = 0.5 + std.math.asin(-normal[1]) / (std.math.pi);
                     break :blk std.simd.extract(texture.get(u,v), 0, 3);
                 }

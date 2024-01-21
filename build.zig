@@ -1,5 +1,5 @@
 const std = @import("std");
-
+const raySdk = @import("raylib/src/build.zig");
 // Although this function looks imperative, note that its job is to
 // declaratively construct a build graph that will be executed by an external
 // runner.
@@ -25,13 +25,15 @@ pub fn build(b: *std.Build) void {
     });
     exe.linkLibC();
     // exe.linkLibCpp();
-    exe.addIncludePath(.{ .path = "src/" });
+    exe.addIncludePath(.{ .path = "lodepng/" });
     const loadepng_flags = &[_][]const u8{
         "-ansi",
         "-O3",
     };
-    exe.addCSourceFile(.{ .file = .{ .path = "src/lodepng.c" }, .flags = loadepng_flags });
-
+    exe.addCSourceFile(.{ .file = .{ .path = "lodepng/lodepng.c" }, .flags = loadepng_flags });
+    const raylib = raySdk.addRaylib(b, target, optimize, .{}) catch unreachable;
+	exe.addIncludePath(.{ .path = "raylib/src" });
+	exe.linkLibrary(raylib);
     // This declares intent for the executable to be installed into the
     // standard location when the user invokes the "install" step (the default
     // step when running `zig build`).
