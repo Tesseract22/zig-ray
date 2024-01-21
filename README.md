@@ -6,7 +6,7 @@ This is the result of running on `redchair.txt`
 ## Usage
 `zig build -Doptimize=ReleaseFast`
 \
-`zig-out/bin/raytrace redchair.txt`
+`zig-out/bin/raytrace redchair.txt <thread_count>(default 1)`
 \
-This may take up to 5 min on older machine.
+This may take up to 5 mins on older machine.
 
