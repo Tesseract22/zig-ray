@@ -6,7 +6,7 @@ This is the result of running on `redchair.txt`
 ## Usage
 `zig build -Doptimize=ReleaseFast`
 \
-`zig-out/bin/raytracer redchair.txt`
+`zig-out/bin/raytrace redchair.txt`
 \
 This may take up to 5 min on older machine.
 
