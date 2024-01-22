@@ -828,6 +828,8 @@ fn renderPixel(rgb_buf: []Vec4, data: Data,  x: usize, y: usize) void {
         pixel.* += color;
     }
 }
+
+const clean_up = @import("builtin").mode == .Debug;
 var thread_count: usize = 1;
 pub fn main() !void {
     RandGen.seed( @intCast(std.time.timestamp()));
@@ -835,7 +837,7 @@ pub fn main() !void {
     // init data structures
     // parse args
     const args = try std.process.argsAlloc(allocator);
-    // defer std.process.argsFree(allocator, args);
+    defer if (clean_up) std.process.argsFree(allocator, args);
 
     if (args.len <= 1) {
         std.log.err("No Input File Provided\n", .{});
@@ -853,9 +855,7 @@ pub fn main() !void {
     // defer data.deinit();
     
     try parseCommands(args[1], allocator, &data);
-    defer {
-        if (State.output_path.len != 0) allocator.free(State.output_path);
-    }
+    defer if (State.output_path.len != 0 and clean_up) allocator.free(State.output_path);
     if (args.len == 3) {
         thread_count = std.fmt.parseInt(u32, args[2], 10) catch 1; 
     }
