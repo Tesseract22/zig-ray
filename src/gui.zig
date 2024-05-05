@@ -806,7 +806,7 @@ fn renderLines(rgb_buf: []Vec4, data: Data, y_start: usize, y_end: usize) void {
 }
 fn renderPullLines(rgb_buf: []Vec4, data: Data, line: *std.atomic.Value(usize)) void {
     while (line.raw < State.height) {
-        const l = line.fetchAdd(1, .Monotonic);
+        const l = line.fetchAdd(1, .monotonic);
         for (0..State.width) |x| {
             renderPixel(rgb_buf, data, x, l);
         }
