@@ -371,20 +371,23 @@ const Ray = struct {
         }
         return if (intersection.t == std.math.floatMax(f32)) null else intersection;
     }
+    // pub fn intersect(self: Ray, data: Data) ?Intersection {
+    //     var it: Intersection = .{.t = std.math.floatMax(f32), .object = undefined };
+    //     if (self.intersectBVH(0, data.bvh_tree.items)) |sub_it| {
+    //         if (sub_it.t < it.t) it = sub_it;
+    //     }
+    //     for (data.planes.items) |*p| {
+    //         const ts = self.plane(p) orelse continue;
+    //         if (ts < t_min) continue; 
+    //         if (ts < it.t) {
+    //             it.t = ts;
+    //             it.object = .{.plane = p };
+    //         }
+    //     }
+    //     return if (it.t == std.math.floatMax(f32)) null else it;
+    // }
     pub fn intersect(self: Ray, data: Data) ?Intersection {
-        var it: Intersection = .{.t = std.math.floatMax(f32), .object = undefined };
-        if (self.intersectBVH(0, data.bvh_tree.items)) |sub_it| {
-            if (sub_it.t < it.t) it = sub_it;
-        }
-        for (data.planes.items) |*p| {
-            const ts = self.plane(p) orelse continue;
-            if (ts < t_min) continue; 
-            if (ts < it.t) {
-                it.t = ts;
-                it.object = .{.plane = p };
-            }
-        }
-        return if (it.t == std.math.floatMax(f32)) null else it;
+        return self.intersectLinear(data);
     }
     pub fn intersectBVH(self: Ray, root: usize, nodes: []BVHNode) ?Intersection {
         const root_node = nodes[root];
