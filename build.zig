@@ -32,7 +32,7 @@ pub fn build(b: *std.Build) void {
     const gui_exe = b.addExecutable(.{
         .name = "main",
 
-        .root_source_file = .{ .path = "src/gui.zig" },
+        .root_source_file = .{ .path = "src/main.zig" },
         .target = target,
         .optimize = optimize,
     });
