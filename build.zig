@@ -42,8 +42,11 @@ pub fn build(b: *std.Build) void {
 
     // optionally enabling raylib gui with -Dgui
     var build_opt = b.addOptions();
-    const gui_enabled = b.option(bool, "gui", "whether to integrate with raylib") orelse false;
+    const gui_enabled = b.option(bool, "gui", "enable displaying process witg raylib") orelse false;
+    const old_thread_impl = b.option(bool, "old",  "enable depreciated static thread implementation") orelse false;
     build_opt.addOption(bool, "gui", gui_enabled);
+    build_opt.addOption(bool, "old", old_thread_impl);
+
     gui_exe.root_module.addOptions("config", build_opt);
 
     if (gui_enabled)  {

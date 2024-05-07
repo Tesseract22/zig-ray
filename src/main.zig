@@ -9,7 +9,9 @@ const rl = @cImport(@cInclude("raylib.h"));
 
 const Vec3 = @Vector(3, f32);
 const Vec4 = @Vector(4, f32);
-const gui_enabled: bool = @import("config").gui;
+const config = @import("config");
+const gui_enabled: bool = config.gui;
+const old_thread: bool = config.old;
 const t_min = 0.01; // avoid self-intersecting
 const secondary_ray_n = 2;
 const secondary_ray_off = 0.05;
@@ -882,20 +884,31 @@ pub fn main() !void {
     @memset(rgb_buf, .{0,0,0,0});
     // defer allocator.free(cv_buf);
     // defer allocator.free(rgb_buf);
-    const each = State.height / thread_count;
-    _ = each;
     var threads = try allocator.alloc(std.Thread, thread_count);
     const time = std.time.milliTimestamp();
     var lines = std.atomic.Value(usize).init(0);
-    for (0..thread_count-1) |i| {
-        threads[i] = try Thread.spawn(.{}, renderPullLines, .{rgb_buf, data, &lines});
-
-    }
-    threads[thread_count-1] = try Thread.spawn(.{}, renderPullLines, .{rgb_buf, data, &lines});
     if (gui_enabled) {
         rl.SetTraceLogLevel(rl.LOG_ERROR);
         rl.InitWindow(@intCast(State.width), @intCast(State.height), "Raytracing");
         rl.SetTargetFPS(30);
+    }
+    if (old_thread) {
+        const each = State.height / thread_count;
+        for (0..thread_count) |i| {
+            threads[i] = try Thread.spawn(.{}, renderLines, .{rgb_buf, data, each*i, each*(i+1)});
+        }
+    } else {
+
+        for (0..thread_count) |i| {
+            threads[i] = try Thread.spawn(.{}, renderPullLines, .{rgb_buf, data, &lines});
+
+        }
+    }
+
+    
+    
+    if (gui_enabled) {
+
         const image = rl.Image {
             .data = @ptrCast(cv_buf.ptr),
             .width = @intCast(State.width),
