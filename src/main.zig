@@ -5,9 +5,11 @@ const Thread = std.Thread;
 const lodepng = @cImport({
     @cInclude("lodepng.h");
 });
+const rl = @cImport(@cInclude("raylib.h"));
 
 const Vec3 = @Vector(3, f32);
 const Vec4 = @Vector(4, f32);
+const gui_enabled: bool = @import("config").gui;
 const t_min = 0.01; // avoid self-intersecting
 const secondary_ray_n = 2;
 const secondary_ray_off = 0.05;
@@ -371,23 +373,20 @@ const Ray = struct {
         }
         return if (intersection.t == std.math.floatMax(f32)) null else intersection;
     }
-    // pub fn intersect(self: Ray, data: Data) ?Intersection {
-    //     var it: Intersection = .{.t = std.math.floatMax(f32), .object = undefined };
-    //     if (self.intersectBVH(0, data.bvh_tree.items)) |sub_it| {
-    //         if (sub_it.t < it.t) it = sub_it;
-    //     }
-    //     for (data.planes.items) |*p| {
-    //         const ts = self.plane(p) orelse continue;
-    //         if (ts < t_min) continue; 
-    //         if (ts < it.t) {
-    //             it.t = ts;
-    //             it.object = .{.plane = p };
-    //         }
-    //     }
-    //     return if (it.t == std.math.floatMax(f32)) null else it;
-    // }
     pub fn intersect(self: Ray, data: Data) ?Intersection {
-        return self.intersectLinear(data);
+        var it: Intersection = .{.t = std.math.floatMax(f32), .object = undefined };
+        if (self.intersectBVH(0, data.bvh_tree.items)) |sub_it| {
+            if (sub_it.t < it.t) it = sub_it;
+        }
+        for (data.planes.items) |*p| {
+            const ts = self.plane(p) orelse continue;
+            if (ts < t_min) continue; 
+            if (ts < it.t) {
+                it.t = ts;
+                it.object = .{.plane = p };
+            }
+        }
+        return if (it.t == std.math.floatMax(f32)) null else it;
     }
     pub fn intersectBVH(self: Ray, root: usize, nodes: []BVHNode) ?Intersection {
         const root_node = nodes[root];
@@ -806,6 +805,15 @@ fn renderLines(rgb_buf: []Vec4, data: Data, y_start: usize, y_end: usize) void {
         }
     }
 }
+fn renderPullLines(rgb_buf: []Vec4, data: Data, line: *std.atomic.Value(usize)) void {
+    while (line.raw < State.height) {
+        const l = line.fetchAdd(1, .monotonic);
+        for (0..State.width) |x| {
+            renderPixel(rgb_buf, data, x, l);
+        }
+    }
+
+}
 
 fn renderPixel(rgb_buf: []Vec4, data: Data,  x: usize, y: usize) void {
     const pixel = &rgb_buf[y * State.width + x];
@@ -875,19 +883,61 @@ pub fn main() !void {
     // defer allocator.free(cv_buf);
     // defer allocator.free(rgb_buf);
     const each = State.height / thread_count;
-    var threads = try allocator.alloc(std.Thread, thread_count-1);
+    _ = each;
+    var threads = try allocator.alloc(std.Thread, thread_count);
     const time = std.time.milliTimestamp();
+    var lines = std.atomic.Value(usize).init(0);
     for (0..thread_count-1) |i| {
-        threads[i] = try Thread.spawn(.{}, renderLines, .{rgb_buf, data, each*i, each*(i+1)});
+        threads[i] = try Thread.spawn(.{}, renderPullLines, .{rgb_buf, data, &lines});
 
     }
-    renderLines(rgb_buf, data, each*(thread_count-1), State.height);
-    // const ray = getRayOnPixel(60, 25);
-    // std.debug.print("ray: {any} == {any}", .{ray, util.normalize(Vec3{0.2,0,-1})});
-    // if (ray.intersect(data)) |_| {
-    //     std.debug.print("intersect\n", .{});
-    // }
-    // converting lrgb -> exposed -> srgb
+    threads[thread_count-1] = try Thread.spawn(.{}, renderPullLines, .{rgb_buf, data, &lines});
+    if (gui_enabled) {
+        rl.SetTraceLogLevel(rl.LOG_ERROR);
+        rl.InitWindow(@intCast(State.width), @intCast(State.height), "Raytracing");
+        rl.SetTargetFPS(30);
+        const image = rl.Image {
+            .data = @ptrCast(cv_buf.ptr),
+            .width = @intCast(State.width),
+            .height = @intCast(State.height),
+            .mipmaps = 1,
+            .format = rl.PIXELFORMAT_UNCOMPRESSED_R8G8B8A8,
+        };
+        // const image = raylib.LoadImage("redchair.png");
+        const texture = rl.LoadTextureFromImage(image);
+
+        while (!rl.WindowShouldClose() and lines.raw < State.height) {
+            rl.BeginDrawing();
+            for (0..State.height) |y| {
+                for (0..State.width) |x| {
+                    const lcolor = @min(@max(rgb_buf[y * State.width + x], @as(Vec4, @splat(0))), @as(Vec4, @splat(1)));
+                    var scolor = lcolor;
+
+                    for (0..3) |i| {
+                        if (State.expose) |expose| {
+                            scolor[i] = 1.0 - @exp(-expose * scolor[i]);
+                        }
+                        if (scolor[i] <= 0.0031308) {
+                            scolor[i] *= 12.92;
+                        } else {
+                            scolor[i] = 1.055 * std.math.pow(f32, scolor[i], 1.0/2.4) - 0.055;
+                        }
+                    }
+                    const c = util.rgbaVecToU32(scolor);
+                    cv_buf[y * State.width + x] = c;
+                    // raylib.DrawCircle(@intCast(x), @intCast(y), 1.0, @as(*raylib.Color, @ptrCast(@constCast(&c))).*);
+                    
+                }
+            }
+
+            rl.UpdateTexture(texture, @ptrCast(cv_buf.ptr));
+            rl.DrawTexture(texture, 0, 0, rl.WHITE);
+            rl.EndDrawing();
+        }
+        rl.CloseWindow();
+    } 
+
+
     for (threads) |t| {
         t.join();
     }
@@ -917,4 +967,18 @@ pub fn main() !void {
     std.debug.print("PNG encode: [{}] {s}\n", .{res, lodepng.lodepng_error_text(res)});
     var output_file = try std.fs.cwd().createFile(State.output_path, .{.truncate = true});
     try output_file.writeAll(encoded[0..size]);
+}
+var test_ct = std.atomic.Value(usize).init(0);
+fn count() void {
+    while (test_ct.raw < 100) {
+        const i = test_ct.fetchAdd(1, .Monotonic);
+        std.debug.print("{}\n", .{i});
+    }
+}
+test "atomic" {
+
+    var threads: [10]std.Thread = undefined;
+    for (0..10) |i| {
+        threads[i] = try std.Thread.spawn(.{}, count, .{});
+    }
 }
